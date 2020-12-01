@@ -1,0 +1,31 @@
+#!/home/steven/bin/mc_scripts/python
+
+import datetime
+import os
+import pathlib
+import shutil
+
+import namesgenerator
+
+SRC = pathlib.Path("~", "minerl.data").expanduser()
+ARCHIVE_HOME = pathlib.Path("/scratch/steven2/minerl_data_archive/")
+
+
+def archive():
+    """
+    Copies `minerl.data` to
+    /scratch/steven2/minerl_data_archive/timestamp_random_name/.
+
+    Maybe make this a separate script?"""
+    today = datetime.date.today()
+    rand_name = namesgenerator.get_random_name()
+    ARCHIVE_HOME.mkdir(exist_ok=True, parents=True)
+    archive_dir = ARCHIVE_HOME / f"{today}_{rand_name}"
+
+    print(f"Archiving {SRC} to {archive_dir}...")
+    shutil.copytree(SRC, archive_dir, copy_function=os.link)
+    print("Done.")
+
+
+if __name__ == "__main__":
+    archive()

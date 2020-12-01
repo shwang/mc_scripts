@@ -1,0 +1,4 @@
+bullet
+namesgenerator
+prettytable
+simple_term_menu

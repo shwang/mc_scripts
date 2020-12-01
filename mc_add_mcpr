@@ -1,0 +1,47 @@
+#!/home/steven/bin/mc_scripts/python
+
+"""Interactively copies MCPR from ~/.minecraft/replay_recordings to merged/ dir.
+
+Also adds JSON needed for thing to minecraft.
+"""
+
+import pathlib
+import shutil
+import sys
+import zipfile
+
+import simple_term_menu as menus
+
+SRC_DIR = pathlib.Path("~", ".minecraft", "replay_recordings").expanduser()
+DST_DIR = pathlib.Path("~", "minerl.data", "output", "merged").expanduser()
+
+
+def main():
+    if len(sys.argv) > 1:
+        print(f"{sys.argv[0]} accepts no arguments.")
+        exit(1)
+
+    mcpr_paths = list(SRC_DIR.glob("*.mcpr"))
+    menu = menus.TerminalMenu([path.name for path in mcpr_paths])
+    i = menu.show()
+    if i is None:  # KeyboardInterrupt
+        exit(1)
+
+    src_path = mcpr_paths[i]
+    dst_path = DST_DIR / src_path.name
+
+    # Copy file.
+    dst_path.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(src_path, dst_path)
+    print(f"Copied {src_path} to {dst_path}.")
+
+    # Add `render.py`-required metadata to zip archive if necessary.
+    with zipfile.ZipFile(dst_path, "a") as archive:
+        req_file = "stream_meta_data.json"
+        archive.writestr(req_file, '{"has_EOF": true, "miss_seq_num": false}')
+        if req_file not in archive.filelist:
+            print(f"Added {req_file} to {dst_path}")
+
+
+if __name__ == "__main__":
+    main()

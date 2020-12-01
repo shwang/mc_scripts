@@ -1,0 +1,43 @@
+#!/home/steven/bin/mc_scripts/python
+
+"""This script opens an interactive menu for swapping one mutually exclusive
+Minecraft Jar for another in Steven's dev environment.
+"""
+
+import pathlib
+import simple_term_menu as menus
+
+
+def main():
+    main_mod_dir = pathlib.Path("~", ".minecraft", "mods").expanduser()
+    mutex_symlink = main_mod_dir / "mutex.jar"
+
+    if mutex_symlink.is_symlink():
+        print(f"mutex.jar currently points to '{mutex_symlink.resolve()}'\n")
+
+    mutex_mod_dir = main_mod_dir / "mutually_exclusive"
+    mutex_mod_paths = sorted(list(mutex_mod_dir.glob("**/*.jar")))
+
+    if len(mutex_mod_paths) == 0:
+        print(f"Zero jars found in {mutex_mod_dir}. Aborting.")
+        exit(1)
+
+    print("Select new source for mutex.jar:")
+    menu = menus.TerminalMenu(
+        [str(x.relative_to(mutex_mod_dir)) for x in mutex_mod_paths])
+    i = menu.show()
+    if i is None:  # User interrupted menu selection. Abort.
+        exit(2)
+
+    src_mod_path = mutex_mod_paths[i]
+    print(f"Linking {main_mod_dir}{{{mutex_symlink.relative_to(main_mod_dir)} -> "
+          f"{src_mod_path.relative_to(main_mod_dir)}}}.")
+
+    if mutex_symlink.exists() or mutex_symlink.is_symlink():
+        mutex_symlink.unlink()
+    src_mod_path = mutex_mod_paths[i]
+    mutex_symlink.symlink_to(src_mod_path)
+
+
+if __name__ == '__main__':
+    main()

@@ -1,0 +1,37 @@
+#!/home/steven/bin/mc_scripts/python
+
+"""Swap out which thing to symlink into PHONY_MUTEX_PATH."""
+
+import pathlib
+
+import simple_term_menu as menus
+
+
+# TODO(shwang): This wouldn't actually be that useful unless I were
+# pulling my data from outside of the DOWNLOAD_DIR... until then
+# I should just use my modified download.py, I think.
+download_dir = pathlib.Path("~/minerl.data/").resolve_homedir()
+
+phony_mutex_path = download_dir / "FAKE_YEAR/FAKE_MON/FAKE_DAY/mutex"
+
+def main():
+    phony_mutex_path.parent.mkdirs(exist_ok=True, parents=True)
+    curr_path = pathlib.Path(download_dir)
+    for _ in range(3):
+        print("Select subdirectory")
+        subdirs = [curr_path.glob("[0-9]*")]
+        menu = menus.TerminalMenu([str(x) for x in subdirs])
+        i = menu.show()
+        if i is None:  # KeyboardInterrupt
+            exit(1)
+        curr_path = subdirs[i]
+
+    # Now move the mutex.
+    if phony_mutex_path.exists():
+        assert phony_mutex_path.is_symlink()
+        phony_mutex_path.remove()
+    phony_mutex_path.symlink(curr_path)
+
+
+if __name__ == "__main__":
+    main()

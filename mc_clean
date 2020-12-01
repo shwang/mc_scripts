@@ -1,0 +1,73 @@
+#!/home/steven/bin/mc_scripts/python
+
+import pathlib
+import shutil
+
+import bullet
+
+SRC = pathlib.Path("~", "minerl.data").expanduser()
+
+
+def rm(path):
+    if path.exists():
+        print(f"rm {path}")
+        shutil.rmtree(path)
+    else:
+        print(f"{path} doesn't exist!")
+
+
+def purge():
+    ok = bullet.YesNo(f"About to delete {SRC}/*. Are you sure?")
+    if not ok:
+        print("aborting")
+        return
+    else:
+        for x in SRC.iterdir():
+            rm(x)
+
+
+def wipe_s3_replay():
+    rm(SRC / "downloaded_sync")
+
+
+def wipe_merged_mcpr():
+    rm(SRC / "output" / "merged")
+
+def wipe_rendered_mcpr():
+    rm(SRC / "output" / "rendered")
+
+
+def wipe_generated_datasets():
+    rm(SRC / "output" / "data")
+
+
+def generate_version_file():
+    path = "/home/steven/minerl.data/output/data/VERSION"
+    with open(path, "w") as f:
+        f.write("3")
+    print(f"Wrote to {path}.")
+
+
+def main():
+    cmd_dict = {
+        "wipe_generate (datasets)": wipe_generated_datasets,
+        "wipe_render (pre-dataset mp4, json)": wipe_rendered_mcpr,
+        "wipe_merge (MCPR)": wipe_merged_mcpr,
+        "generate version file (used by minerl/.../publish.py)": generate_version_file,
+    }
+    choices = bullet.Check(
+        prompt="Clean options:",
+        choices=list(cmd_dict.keys()) + ["purge"]
+    ).launch()
+
+    if "purge" in choices:
+        purge()
+    elif len(choices) == 0:
+        print("No choices selected. Did you forget to press SPACE?")
+    else:
+        for k in choices:
+            cmd_dict[k]()
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,144 @@
+#!/home/steven/bin/mc_scripts/python
+
+import json
+import pathlib
+import pprint as pp
+import re
+import sys
+from typing import Iterable, List, Optional
+import zipfile
+
+import prettytable
+import simple_term_menu as menus
+
+SRC_DIR = pathlib.Path("~", "minerl.data", "output", "merged").expanduser()
+
+
+def nested_get(d: dict, keys: Iterable):
+    result = d
+    for k in keys:
+        if result is None:
+            break
+        result = result.get(k)
+    return result
+
+
+def attempt_cast_int(x) -> Optional[int]:
+    try:
+        return int(x)
+    except (TypeError, ValueError):
+        return None
+
+
+def attempt_json_loads(x):
+    try:
+        return json.loads(x)
+    except (TypeError, ValueError) as e:
+        return None
+
+
+def substr_brace(s: str, left_brace_index: int) -> str:
+    """Given index of '{', return substr that ends with closing '}', respecting nesting.
+    """
+    assert s[left_brace_index] == "{"
+    depth = 1
+    for i, c in enumerate(s[left_brace_index + 1:]):
+        if c == "{":
+            depth += 1
+        elif c == "}":
+            depth -= 1
+        if depth == 0:
+            right = left_brace_index + i + 2
+            return s[left_brace_index:right]
+
+    raise ValueError(f"Unexpected EOF on '{s[left_brace_index:]}'")
+
+
+"""Example unconverted exp_metadata (one-liner; experimentMetadata={...} has no whitespace
+inside).
+
+'ReplayMetaData{singleplayer=false, serverName=\'localhost\', duration=20158,\
+date=1605808371673, mcversion=\'1.12.2\', fileFormat=\'MCPR\', fileFormatVersion=9,\
+generator=\'ReplayMod v1.12.2-2.1.2-229-gd17235a\', selfId=-1,\
+players=[57240d28-086c-4e61-a24f-32f0cb55cb52],\
+experimentMetadata={"experiment_name":"findcaves","world":"caves",\
+"world_seed":2930404836342656642,"world_type":"EXPERIMENT",\
+"experiment_type":"EXPERIMENT"}}'
+"""
+
+
+def sanitize_exp_metadata(data: dict) -> None:
+    result = {}
+
+    metadata: dict = nested_get(data, ['value', 'metadata'])
+    if metadata is not None:
+        exp_metadata: str = metadata.get("expMetadata")
+
+        if exp_metadata is not None and isinstance(exp_metadata, str):
+            m = re.search(r"duration=(?P<duration>[0-9]*)", exp_metadata)
+            if m:
+                duration = m.group("duration")
+                duration = attempt_cast_int(duration)
+                if duration is not None:
+                    result["duration"] = duration
+
+            e_str = "experimentMetadata={"
+            e_index = exp_metadata.find(e_str)
+            if e_index != -1:
+                left_brace_index = e_index + len(e_str) - 1
+                assert exp_metadata[left_brace_index] == "{"
+                json_str = substr_brace(exp_metadata, left_brace_index)
+                exp_metadata_dict = attempt_json_loads(json_str)
+                if exp_metadata_dict:
+                    result["experiment_metadata"] = exp_metadata_dict
+
+    data["expMetadata"] = result
+
+
+def select_mcpr():
+    print(f"Pick a .mcpr from {SRC_DIR}:")
+    mcpr_paths = list(SRC_DIR.glob("*.mcpr"))
+    menu = menus.TerminalMenu([path.name for path in mcpr_paths])
+    i = menu.show()
+    if i is None:  # KeyboardInterrupt
+        exit(1)
+    return mcpr_paths[i]
+
+
+def analyze_mcpr(target_mcpr_path):
+    marker_path = "markers.json"
+
+    with zipfile.ZipFile(target_mcpr_path, "r") as archive:
+        with archive.open(marker_path, "r") as marker_f:
+            marker_data: list = json.load(marker_f)
+
+    marker_data.sort(key=lambda x: x['realTimestamp'])
+    for x in marker_data:
+        sanitize_exp_metadata(x)
+
+    pp.pprint(marker_data)
+
+
+def main():
+    if len(sys.argv) == 1:
+        target_mcpr_path = select_mcpr()
+    else:
+        if len(sys.argv) > 2:
+            print(f"{sys.argv[0]} only accepts up to one argument.")
+            exit(1)
+        target_mcpr_path = sys.argv[1]
+
+    analyze_mcpr(target_mcpr_path)
+
+
+"""
+markers.json auto-summarizer
+realTimestamp: ____,
+expName: _______,
+(start/stop rec)
+duration
+realTimestamp (ms), expname, recording_status (START,STOP), experiment_end_data
+"""
+
+if __name__ == "__main__":
+    main()
